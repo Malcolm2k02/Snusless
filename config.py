@@ -19,7 +19,7 @@ COST_PER_PORTION = 0.23 # Average cost of a snus portion in euros
 ALPHA = 0.1 # Learning rate for Q-learning updates
 GAMMA = 0.9 # Discount factor for future rewards in Q-learning updates
 
-EPSILON_START = 0.30
+EPSILON_START = 0.60
 EPSILON_END = 0.05
 
 Q_TABLE = {}

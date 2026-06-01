@@ -118,6 +118,65 @@ def make_all_plots(baseline, adaptive, adaptive_events):
     plt.tight_layout()
     plt.show()
 
+        # Plot: Adaptive recommender effect by quitting strategy
+    strategy_effect = (
+        adaptive_active
+        .groupby(["day", "strategy"])["snus_used"]
+        .mean()
+        .reset_index()
+    )
+
+    plt.figure()
+    for strategy in strategy_effect["strategy"].unique():
+        subset = strategy_effect[strategy_effect["strategy"] == strategy].copy()
+
+        subset["snus_used_smoothed"] = (
+            subset["snus_used"]
+            .rolling(window=3, min_periods=1)
+            .mean()
+        )
+
+        plt.plot(
+            subset["day"],
+            subset["snus_used_smoothed"],
+            linewidth=2.5,
+            label=strategy.replace("_", " ").title()
+        )
+
+    plt.xlabel("Simulation day")
+    plt.ylabel("Average snus portions used per active user")
+    plt.title("Adaptive Recommender Effect by Quitting Strategy")
+    plt.legend(title="Strategy")
+    plt.tight_layout()
+    plt.show()
+
+        # Plot: Retention by quitting strategy
+    retention_by_strategy = (
+        adaptive
+        .groupby(["day", "strategy"])["active"]
+        .mean()
+        .reset_index()
+    )
+
+    plt.figure()
+    for strategy in retention_by_strategy["strategy"].unique():
+        subset = retention_by_strategy[retention_by_strategy["strategy"] == strategy]
+
+        plt.plot(
+            subset["day"],
+            subset["active"],
+            linewidth=2.5,
+            label=strategy.replace("_", " ").title()
+        )
+
+    plt.xlabel("Simulation day")
+    plt.ylabel("Proportion of users still active")
+    plt.title("User Retention by Quitting Strategy")
+    plt.ylim(0, 1.05)
+    plt.legend(title="Strategy")
+    plt.tight_layout()
+    plt.show()
+
     trigger_effect = (
         adaptive_active
         .groupby(["day", "inferred_trigger"])["snus_used"]

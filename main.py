@@ -8,7 +8,7 @@ from config import Q_TABLE
 Q_TABLE.clear()
 
 training, training_events = simulate(
-    n_users=500,
+    n_users=1500,
     days=30,
     algorithm=True,
     training_mode=True
