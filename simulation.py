@@ -75,7 +75,12 @@ def simulate(n_users=300, days=30, algorithm=True, training_mode=True):
                     continue
             daily_cravings = int(
                 user.baseline_use *
-                (0.8 + user.stress * 0.4 + user.addiction * 0.4 + user.craving * 0.3)
+                (0.7 + user.stress * 0.25 + user.addiction * 0.25 + user.craving * 0.20)
+            )
+
+            daily_cravings = max(
+                1,
+                min(daily_cravings, int(user.baseline_use * 1.25))
             )
 
             snus_used = 0
