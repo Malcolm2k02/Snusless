@@ -46,7 +46,33 @@ def simulate(n_users=300, days=30, algorithm=True, training_mode=True):
                     "inferred_trigger": user.most_likely_trigger()
                 })
                 continue
+            if user.abstinent:
+                relapsed = user.check_relapse_from_abstinence()
 
+                if not relapsed:
+                    user.check_dropout()
+
+                    results.append({
+                        "day": day,
+                        "user_id": user_id,
+                        "user_type": user.user_type,
+                        "strategy": user.strategy,
+                        "active": user.active,
+                        "snus_used": 0,
+                        "nudges_sent": 0,
+                        "skips": 0,
+                        "delays": 0,
+                        "ignores": 0,
+                        "money_saved": user.baseline_use * COST_PER_PORTION,
+                        "fatigue": user.fatigue,
+                        "motivation": user.motivation,
+                        "self_efficacy": user.self_efficacy,
+                        "inferred_trigger": user.most_likely_trigger(),
+                        "secondary_trigger": user.most_likely_trigger(),
+                        "trigger_confidence": max(user.trigger_beliefs.values())
+                    })
+
+                    continue
             daily_cravings = int(
                 user.baseline_use *
                 (0.8 + user.stress * 0.4 + user.addiction * 0.4 + user.craving * 0.3)
@@ -61,7 +87,7 @@ def simulate(n_users=300, days=30, algorithm=True, training_mode=True):
             for _ in range(daily_cravings):
 
                 true_triggers = sample_true_triggers_for_user(user)
-                observed_trigger = user.observe_trigger(true_triggers)
+                observed_signals = user.observe_context_signals(true_triggers)
 
                 actual_risk = user.predict_risk(true_triggers)
                 estimated_risk = user.estimate_risk_from_beliefs()
@@ -107,7 +133,7 @@ def simulate(n_users=300, days=30, algorithm=True, training_mode=True):
                 response = user.respond_to_nudge(actual_risk, nudge)
 
                 user.update_feedback_loops(response, nudge)
-                user.update_trigger_beliefs(observed_trigger, response)
+                user.update_trigger_beliefs(observed_signals, response)
 
                 event_results.append({
                     "day": day,
@@ -116,7 +142,9 @@ def simulate(n_users=300, days=30, algorithm=True, training_mode=True):
                     "strategy": user.strategy,
                     "actual_triggers": ",".join(true_triggers),
                     "actual_primary_trigger": actual_primary_trigger,
-                    "observed_trigger": observed_trigger,
+                    "observed_time_of_day": observed_signals["time_of_day"],
+                    "observed_location_type": observed_signals["location_type"],
+                    "observed_time_since_meal": observed_signals["time_since_meal"],
                     "inferred_trigger": inferred_trigger_before,
                     "nudge": nudge,
                     "response": response,
@@ -146,7 +174,8 @@ def simulate(n_users=300, days=30, algorithm=True, training_mode=True):
 
                 if nudges_sent > 4:
                     user.fatigue = min(1.0, user.fatigue + 0.005)
-
+            
+            user.check_abstinence(snus_used)
             user.check_dropout()
 
             money_saved = max(0, (user.baseline_use - snus_used) * COST_PER_PORTION)

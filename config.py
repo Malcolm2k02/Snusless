@@ -32,68 +32,64 @@ Q_TABLE = {}
 CONTEXTS = [
     "after_meal",
     "social_setting",
-    "stress",
     "studying",
     "alcohol_context",
     "morning_craving",
-    "boredom",
     "sleeping"
 ]
 
 CONTEXT_RISK = {
     "after_meal": 0.15,
     "social_setting": 0.20,
-    "stress": 0.25,
     "studying": 0.10,
     "alcohol_context": 0.25,
     "morning_craving": 0.20,
-    "boredom": 0.10,
     "sleeping": 0.18
 }
 
-OBSERVATION_MODEL = {
-    "after_meal": {
-        "after_meal": 0.60, "boredom": 0.15, "social_setting": 0.10,
-        "stress": 0.05, "studying": 0.03, "morning_craving": 0.03,
-        "alcohol_context": 0.02, "sleeping": 0.02
-    },
-    "social_setting": {
-        "social_setting": 0.55, "alcohol_context": 0.20, "stress": 0.10,
-        "after_meal": 0.05, "boredom": 0.05, "studying": 0.02,
-        "morning_craving": 0.02, "sleeping": 0.01
-    },
-    "stress": {
-        "stress": 0.55, "studying": 0.15, "boredom": 0.10,
-        "social_setting": 0.08, "after_meal": 0.04, "sleeping": 0.03,
-        "morning_craving": 0.03, "alcohol_context": 0.02
-    },
-    "studying": {
-        "studying": 0.60, "stress": 0.20, "boredom": 0.08,
-        "after_meal": 0.04, "social_setting": 0.03, "morning_craving": 0.02,
-        "sleeping": 0.02, "alcohol_context": 0.01
-    },
-    "alcohol_context": {
-        "alcohol_context": 0.65, "social_setting": 0.20, "stress": 0.05,
-        "boredom": 0.04, "after_meal": 0.03, "morning_craving": 0.01,
-        "studying": 0.01, "sleeping": 0.01
-    },
-    "morning_craving": {
-        "morning_craving": 0.65, "stress": 0.10, "sleeping": 0.10,
-        "after_meal": 0.05, "boredom": 0.04, "studying": 0.03,
-        "social_setting": 0.02, "alcohol_context": 0.01
-    },
-    "boredom": {
-        "boredom": 0.55, "stress": 0.15, "studying": 0.10,
-        "social_setting": 0.08, "after_meal": 0.05, "sleeping": 0.03,
-        "morning_craving": 0.02, "alcohol_context": 0.02
-    },
-    "sleeping": {
-        "sleeping": 0.60, "morning_craving": 0.15, "stress": 0.10,
-        "boredom": 0.05, "after_meal": 0.04, "studying": 0.03,
-        "social_setting": 0.02, "alcohol_context": 0.01
-    }
+OBSERVABLE_SIGNALS = {
+    "time_of_day": ["morning", "midday", "afternoon", "evening", "night"],
+    "location_type": ["home", "university", "restaurant", "bar", "social_place", "unknown"],
+    "time_since_meal": ["0_30_min", "30_90_min", "90_plus_min"]
 }
 
+CONTEXT_SIGNAL_MODEL = {
+    "after_meal": {
+        "time_of_day": {"morning": 0.15, "midday": 0.35, "afternoon": 0.15, "evening": 0.30, "night": 0.05},
+        "location_type": {"home": 0.45, "restaurant": 0.40, "university": 0.05, "bar": 0.02, "social_place": 0.03, "unknown": 0.05},
+        "time_since_meal": {"0_30_min": 0.70, "30_90_min": 0.20, "90_plus_min": 0.10}
+    },
+
+    "social_setting": {
+        "time_of_day": {"morning": 0.05, "midday": 0.15, "afternoon": 0.25, "evening": 0.40, "night": 0.15},
+        "location_type": {"home": 0.15, "restaurant": 0.15, "university": 0.10, "bar": 0.15, "social_place": 0.40, "unknown": 0.05},
+        "time_since_meal": {"0_30_min": 0.25, "30_90_min": 0.35, "90_plus_min": 0.40}
+    },
+
+    "studying": {
+        "time_of_day": {"morning": 0.20, "midday": 0.30, "afternoon": 0.35, "evening": 0.10, "night": 0.05},
+        "location_type": {"home": 0.25, "restaurant": 0.02, "university": 0.65, "bar": 0.01, "social_place": 0.02, "unknown": 0.05},
+        "time_since_meal": {"0_30_min": 0.15, "30_90_min": 0.35, "90_plus_min": 0.50}
+    },
+
+    "alcohol_context": {
+        "time_of_day": {"morning": 0.01, "midday": 0.03, "afternoon": 0.10, "evening": 0.50, "night": 0.36},
+        "location_type": {"home": 0.10, "restaurant": 0.10, "university": 0.01, "bar": 0.55, "social_place": 0.20, "unknown": 0.04},
+        "time_since_meal": {"0_30_min": 0.20, "30_90_min": 0.35, "90_plus_min": 0.45}
+    },
+
+    "morning_craving": {
+        "time_of_day": {"morning": 0.75, "midday": 0.10, "afternoon": 0.05, "evening": 0.05, "night": 0.05},
+        "location_type": {"home": 0.75, "restaurant": 0.02, "university": 0.10, "bar": 0.01, "social_place": 0.02, "unknown": 0.10},
+        "time_since_meal": {"0_30_min": 0.10, "30_90_min": 0.20, "90_plus_min": 0.70}
+    },
+
+    "sleeping": {
+        "time_of_day": {"morning": 0.10, "midday": 0.02, "afternoon": 0.03, "evening": 0.10, "night": 0.75},
+        "location_type": {"home": 0.85, "restaurant": 0.01, "university": 0.02, "bar": 0.01, "social_place": 0.01, "unknown": 0.10},
+        "time_since_meal": {"0_30_min": 0.05, "30_90_min": 0.20, "90_plus_min": 0.75}
+    }
+}
 
 # -----------------------------
 # 3. Psychology-informed user groups

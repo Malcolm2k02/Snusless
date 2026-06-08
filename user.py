@@ -1,4 +1,4 @@
-from config import Q_TABLE, CONTEXTS, CONTEXT_RISK, OBSERVATION_MODEL, NUDGES, REWARD, ALPHA, GAMMA, USER_TYPES
+from config import (Q_TABLE, CONTEXTS, CONTEXT_RISK, CONTEXT_SIGNAL_MODEL, NUDGES, REWARD, ALPHA, GAMMA, USER_TYPES)
 from utils import discretize
 import random
 import numpy as np
@@ -24,8 +24,9 @@ class User:
 
         self.fatigue = 0.0
         self.active = True
+        self.abstinent = False
 
-        self.strategy = random.choice(["cold_turkey", "gradual_reduction"])
+        self.strategy = "gradual_reduction"
 
         self.current_day = 1
         self.success_streak = 0
@@ -52,40 +53,65 @@ class User:
             self.strategy
         )
 
-    def observe_trigger(self, true_triggers):
-        """
-        Structured noisy observation model.
-
-        The app does not observe the true trigger directly.
-        It observes a noisy clue that can confuse related triggers.
-        """
-
+    def observe_context_signals(self, true_triggers):
         true_trigger = random.choice(true_triggers)
+        signal_model = CONTEXT_SIGNAL_MODEL[true_trigger]
 
-        possible_observations = list(OBSERVATION_MODEL[true_trigger].keys())
-        probabilities = list(OBSERVATION_MODEL[true_trigger].values())
+        observed_signals = {}
 
-        return np.random.choice(possible_observations, p=probabilities)
+        for signal_name, probabilities_dict in signal_model.items():
+            values = list(probabilities_dict.keys())
+            probabilities = list(probabilities_dict.values())
 
-    def update_trigger_beliefs(self, observed_trigger, response):
-        """Updates the user's beliefs about their triggers based on the observed trigger and their response to a nudge"""
+            observed_signals[signal_name] = np.random.choice(
+                values,
+                p=probabilities
+            )
+
+        return observed_signals
+
+    def update_trigger_beliefs(self, observed_signals, response):
+        posterior = {}
+
+        for context in CONTEXTS:
+            prior = self.trigger_beliefs[context]
+            likelihood = 1.0
+
+            for signal_name, observed_value in observed_signals.items():
+                likelihood *= CONTEXT_SIGNAL_MODEL[context][signal_name].get(
+                    observed_value,
+                    0.001
+                )
+
+            posterior[context] = prior * likelihood
+
+        total = sum(posterior.values())
+
+        if total == 0:
+            self.trigger_beliefs = {
+                context: 1 / len(CONTEXTS) for context in CONTEXTS
+            }
+            return
+
+        for context in CONTEXTS:
+            self.trigger_beliefs[context] = posterior[context] / total
+
+        # Behavioral feedback: if use/ignore happens, slightly reinforce the inferred context.
+        inferred_context = self.most_likely_trigger()
+
         if response == "use":
-            self.trigger_beliefs[observed_trigger] += 0.20
+            self.trigger_beliefs[inferred_context] += 0.08
         elif response == "ignore":
-            self.trigger_beliefs[observed_trigger] += 0.12
+            self.trigger_beliefs[inferred_context] += 0.04
         elif response == "delay":
-            self.trigger_beliefs[observed_trigger] += 0.05
+            self.trigger_beliefs[inferred_context] += 0.02
         elif response == "skip":
-            self.trigger_beliefs[observed_trigger] += 0.02
-
-        for trigger in self.trigger_beliefs:
-            if trigger != observed_trigger:
-                self.trigger_beliefs[trigger] *= 0.98
+            self.trigger_beliefs[inferred_context] += 0.01
 
         total = sum(self.trigger_beliefs.values())
 
-        for trigger in self.trigger_beliefs:
-            self.trigger_beliefs[trigger] /= total
+        for context in CONTEXTS:
+            self.trigger_beliefs[context] /= total
 
     def predict_risk(self, true_triggers):
         """Calculates the user's actual risk of using snus based on their characteristics and the true triggers they are experiencing."""
@@ -319,3 +345,65 @@ class User:
 
         if random.random() < dropout_probability:
             self.active = False
+    def check_abstinence(self, snus_used):
+        """
+        Users with low addiction, high motivation, and high self-efficacy
+        have a chance to transition into complete abstinence.
+        """
+
+        if self.abstinent:
+            return
+
+        reduction_ratio = 1 - (snus_used / max(1, self.baseline_use))
+
+        abstinence_probability = (
+            0.02
+            + 0.10 * self.motivation
+            + 0.10 * self.self_efficacy
+            - 0.12 * self.addiction
+            - 0.06 * self.stress
+            - 0.04 * self.fatigue
+        )
+
+        if reduction_ratio > 0.75:
+            abstinence_probability += 0.08
+
+        if snus_used <= 1:
+            abstinence_probability += 0.08
+
+        if self.user_type == "Low relapse risk / low intake":
+            abstinence_probability += 0.10
+        elif self.user_type == "Low relapse risk / high intake":
+            abstinence_probability += 0.05
+        elif self.user_type == "High relapse risk / high intake":
+            abstinence_probability -= 0.04
+        if self.addiction > 0.8 and snus_used <= 2 and reduction_ratio > 0.70:
+            abstinence_probability += 0.02
+        # Even high-addiction users have a small chance of reaching abstinence.
+        # Low-risk users still have a much higher chance.
+        abstinence_probability = max(0.003, min(0.30, abstinence_probability))
+
+        if random.random() < abstinence_probability:
+            self.abstinent = True
+
+
+    def check_relapse_from_abstinence(self):
+        """
+        Abstinent users can still relapse, especially if addiction and stress are high.
+        """
+
+        relapse_probability = (
+            0.01
+            + 0.05 * self.addiction
+            + 0.03 * self.stress
+            + 0.03 * self.craving
+            - 0.04 * self.self_efficacy
+        )
+
+        relapse_probability = max(0.01, min(0.15, relapse_probability))
+
+        if random.random() < relapse_probability:
+            self.abstinent = False
+            return True
+
+        return False
