@@ -291,64 +291,7 @@ def make_all_plots(baseline, adaptive, adaptive_events):
     )
 
     # ------------------------------------------------------------
-    # Plot 7: Distribution of inferred triggers
-    # ------------------------------------------------------------
-
-    trigger_counts = (
-        adaptive_active["inferred_trigger"]
-        .value_counts()
-        .sort_values(ascending=True)
-    )
-
-    plt.figure(figsize=(10, 5.8))
-    plt.barh(
-        [clean_label(trigger) for trigger in trigger_counts.index],
-        trigger_counts.values
-    )
-
-    plt.title("Distribution of Inferred Triggers", fontweight="bold", pad=12)
-    plt.xlabel("Number of active user-day observations")
-    plt.ylabel("Inferred trigger")
-    plt.tight_layout()
-    plt.show()
-
-    # ------------------------------------------------------------
-    # Plot 8: Adaptive effect by inferred trigger
-    # ------------------------------------------------------------
-
-    trigger_effect = (
-        adaptive_active
-        .groupby(["day", "inferred_trigger"])["snus_used"]
-        .mean()
-        .reset_index()
-    )
-
-    trigger_effect = smooth_series(
-        trigger_effect,
-        value_col="snus_used",
-        group_col="inferred_trigger"
-    )
-
-    plt.figure(figsize=(11, 6))
-    for trigger in trigger_effect["inferred_trigger"].unique():
-        subset = trigger_effect[trigger_effect["inferred_trigger"] == trigger]
-
-        plt.plot(
-            subset["day"],
-            subset["snus_used_smoothed"],
-            linewidth=2.2,
-            label=clean_label(trigger)
-        )
-
-    finish_plot(
-        title="Adaptive Recommender Effect by Inferred Trigger",
-        xlabel="Simulation day",
-        ylabel="Average snus portions per active user",
-        legend_title="Inferred trigger"
-    )
-
-    # ------------------------------------------------------------
-    # Plot 9: Trigger inference confusion matrix
+    # Plot 7: Trigger inference confusion matrix
     # ------------------------------------------------------------
 
     confusion = pd.crosstab(
