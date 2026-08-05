@@ -193,7 +193,6 @@ The framework generates figures including
 - Money saved
 - Sustained abstinence
 
-*(Example figures can be placed here.)*
 
 ---
 
@@ -211,29 +210,6 @@ project/
 ├── main.py
 └── README.md
 ```
-
----
-
-# Installation
-
-Clone the repository
-
-```bash
-git clone https://github.com/USERNAME/repository.git
-```
-
-Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-Run the simulation
-
-```bash
-python main.py
-```
-
 ---
 
 # Methodology
