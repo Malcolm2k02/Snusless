@@ -18,7 +18,7 @@ Open the **Local** URL printed in the terminal, normally [http://127.0.0.1:5173/
 
 - Keep the terminal open while using the app. To stop it, press **Ctrl+C**.
 - To run it another day or after restarting the computer, repeat the commands above. No database setup is needed again.
-- Click **Logga in med ChatGPT** to enter the local development test account. This local button does not require a real ChatGPT login. The app labels it **Lokalt testkonto**.
+- Choose **Fortsätt utan konto** to start immediately with browser-local storage. Email/password and Google options require the one-time setup in [AUTH_SETUP.md](AUTH_SETUP.md). Existing local test records remain available under **Tidigare testkonto** → **Öppna befintlig ChatGPT-logg**, labeled **Lokalt testkonto**.
 - Your local test records survive server restarts in `web/.wrangler/state`. Do not delete that folder if you want to keep them. Use the app's export button to save a readable copy of your records.
 - This address works on this computer while the server is running; it is not a published website.
 
@@ -45,7 +45,11 @@ npm run dev
 
 Replace the example folder with your actual checkout path. Apply the initial migration only once per local database; it has already been applied on Malcolm's computer. Later migrations must be applied in order. Open the exact URL printed by the development server (normally http://127.0.0.1:5173).
 
-Development sign-in is a loopback-only test account supplied by the starter. It is labeled **Lokalt testkonto** in the app and persists in local D1. It is not a real public login service. Production uses Sites' dispatch-owned ChatGPT sign-in; the dispatcher, not the client, must supply the authenticated user headers. Do not expose the Worker directly to the internet behind an untrusted header-forwarding proxy.
+Development sign-in is a loopback-only test account supplied by the starter. It is labeled **Lokalt testkonto** in the app and persists in local D1. It is not a real public login service. The legacy ChatGPT path uses Sites' dispatch-owned sign-in; the dispatcher, not the client, must supply the authenticated user headers. Do not expose the Worker directly to the internet behind an untrusted header-forwarding proxy.
+
+## Account and guest access
+
+See [AUTH_SETUP.md](AUTH_SETUP.md) for Supabase email/password and Google configuration, guest-storage behavior, and verification. Guest mode is available without a provider project; account buttons remain disabled until configured. No passwords are stored in D1.
 
 ## Implemented
 
@@ -81,6 +85,6 @@ Domain tests cover the specification's savings fixture, negative differences, mi
 
 The Site was registered privately as `appgprj_6abbba238d908191a0202bebaf405d97`; its identity is retained in `.openai/hosting.json`. No version has been published. The Sites plugin and publishing scripts were removed from this machine during implementation. Restore the plugin to resume its normal source-sync/build/publish workflow using this existing identity; do not create a replacement Site.
 
-Before inviting users: confirm the pilot audience, review the final Swedish exercise content with the project owner, set a concrete backup-retention/privacy policy, verify deployed sign-in and data isolation, and run the planned usability sessions. The proposed 18-25 pilot has not been silently broadened or recruited. ChatGPT sign-in is the current supported identity path; external consumer authentication would be a separate implementation decision.
+Before inviting users: confirm the pilot audience, review the final Swedish exercise content with the project owner, set a concrete backup-retention/privacy policy, verify deployed sign-in and data isolation, and run the planned usability sessions. The proposed 18-25 pilot has not been silently broadened or recruited. Email/password and Google integration is implemented but requires a Supabase project and provider configuration before live verification. The legacy ChatGPT identity path is retained for existing records.
 
 Push notifications are deliberately absent, as allowed by the MVP delivery gate. There is no live RL, passive sensing, medical risk scoring, or claim of clinically demonstrated effectiveness.

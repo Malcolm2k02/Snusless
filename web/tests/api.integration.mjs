@@ -3,7 +3,16 @@ import {randomUUID} from 'node:crypto';
 import {Miniflare} from 'miniflare';
 import {readFile,readdir} from 'node:fs/promises';
 const files=(await readdir('dist/server',{recursive:true})).filter(f=>f.endsWith('.js')&&f!=='index.js');
-const mf=new Miniflare({modules:[{type:'ESModule',path:'dist/server/index.js'},...files.map(f=>({type:'ESModule',path:'dist/server/'+f}))],compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],d1Databases:{DB:'test-db'},cf:false});
+const accountIds=[randomUUID(),randomUUID()];
+const mf=new Miniflare({modules:[{type:'ESModule',path:'dist/server/index.js'},...files.map(f=>({type:'ESModule',path:'dist/server/'+f}))],compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],d1Databases:{DB:'test-db'},cf:false,
+ bindings:{SUPABASE_URL:'https://auth.example.test',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test'},
+ outboundService:async request=>{
+  assert.equal(request.url,'https://auth.example.test/auth/v1/user');
+  assert.equal(request.headers.get('apikey'),'sb_publishable_test');
+  const token=request.headers.get('authorization');
+  const index=['Bearer account-a','Bearer account-b'].indexOf(token);
+  return new Response(JSON.stringify(index>=0?{id:accountIds[index]}:{error:'invalid token'}),{status:index>=0?200:401,headers:{'Content-Type':'application/json'}});
+ }});
 const db=await mf.getD1Database('DB');
 await db.prepare(await readFile('drizzle/0000_round_umar.sql','utf8')).run();
 const base='http://localhost';
@@ -31,6 +40,27 @@ try{
  assert.equal((await request(ids[1],'DELETE',{confirm:'DELETE'})).status,200);
  assert.equal((await request(ids[0])).body.journal.entries.length,2);
  assert.equal((await request(ids[1])).body.revision,-1);
+ async function account(token,method='GET',data,origin=base){
+  const r=await mf.dispatchFetch(base+'/api/state',{method,headers:{Authorization:'Bearer '+token,Origin:origin,'Content-Type':'application/json','oai-authenticated-user-id':ids[0],'oai-authenticated-user-email':'qa@example.test'},body:data?JSON.stringify(data):undefined});
+  return {status:r.status,body:await r.json()};
+ }
+ assert.equal((await account('forged')).status,401);
+ assert.equal((await account('account-a')).body.revision,-1);
+ const setup={operation:randomUUID(),revision:-1,command:{type:'settings',values:settings,effective:day,onboard:true}};
+ assert.equal((await account('account-a','POST',setup,'https://foreign.example')).status,403);
+ assert.equal((await account('account-a','POST',setup)).status,200);
+ const entry={operation:randomUUID(),revision:0,command:{type:'entry',entry:{id:randomUUID(),quantity:3,time:new Date().toISOString(),context:null}}};
+ assert.equal((await account('account-a','POST',entry)).status,200);
+ assert.equal((await account('account-a','POST',entry)).status,200);
+ assert.equal((await account('account-a')).body.journal.entries.length,1);
+ assert.equal((await account('account-b')).body.journal.entries.length,0);
+ assert.equal((await account('account-b','DELETE',{confirm:'DELETE'})).status,200);
+ assert.equal((await account('account-a')).body.journal.entries.length,1);
+ assert.equal((await request(ids[0])).body.journal.entries.length,2);
+ assert.equal((await account('forged','DELETE',{confirm:'DELETE'})).status,401);
+ assert.equal((await account('account-a','DELETE',{confirm:'DELETE'})).status,200);
+ assert.equal((await account('account-a')).body.revision,-1);
  console.log('PASS: authentication, origin checks, persistence, idempotency, account isolation, CAS concurrency, and deletion isolation.');
+ console.log('PASS: verified account tokens, forged-token rejection without legacy fallback, and account/legacy isolation.');
 }finally{await mf.dispose();}
 

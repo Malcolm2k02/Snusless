@@ -2,12 +2,19 @@ import { getChatGPTUser } from '@/app/chatgpt-auth';
 import { database } from '@/db/store';
 import { apply, emptyJournal, commandSchema, type Journal } from '@/lib/journal';
 import { z } from 'zod';
+import { authConfig } from '@/lib/auth-config';
+import { verifyAccount } from '@/lib/verify-account';
 export const dynamic = 'force-dynamic';
 const response = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
-async function identity() { return (await getChatGPTUser())?.userId; }
+async function identity(req: Request) {
+    const authorization = req.headers.get('authorization');
+    // An invalid account token must never fall back to a different signed-in identity.
+    if (authorization !== null) return verifyAccount(authorization, authConfig());
+    return (await getChatGPTUser())?.userId;
+}
 function sameOrigin(req: Request) { const origin = req.headers.get('origin'); return !!origin && origin === new URL(req.url).origin; }
-export async function GET() { const user = await identity(); if (!user)
-    return response({ error: 'Logga in igen för att fortsätta.' }, 401); try {
+export async function GET(req: Request) { try { const user = await identity(req); if (!user)
+    return response({ error: 'Logga in igen för att fortsätta.' }, 401);
     const row = await database().prepare('SELECT data, revision FROM journals WHERE user_id = ?').bind(user).first<{
         data: string;
         revision: number;
@@ -18,12 +25,12 @@ catch {
     return response({ error: 'Dina uppgifter kunde inte hämtas. Försök igen.' }, 503);
 } }
 export async function POST(req: Request) {
-    const user = await identity();
+    try {
+    const user = await identity(req);
     if (!user)
         return response({ error: 'Logga in igen för att fortsätta.' }, 401);
     if (!sameOrigin(req))
         return response({ error: 'Begäran nekades.' }, 403);
-    try {
         const raw = await req.text();
         if (raw.length > 20000)
             return response({ error: 'För stor begäran.' }, 413);
@@ -53,9 +60,9 @@ export async function POST(req: Request) {
         return response({ error: 'Kunde inte spara. Dina uppgifter finns kvar här. Försök igen.' }, 503);
     }
 }
-export async function DELETE(req: Request) { const user = await identity(); if (!user)
+export async function DELETE(req: Request) { try { const user = await identity(req); if (!user)
     return response({ error: 'Logga in igen.' }, 401); if (!sameOrigin(req))
-    return response({ error: 'Begäran nekades.' }, 403); try {
+    return response({ error: 'Begäran nekades.' }, 403);
     const body = await req.json() as {
         confirm?: string;
     };
