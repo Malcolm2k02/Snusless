@@ -1,79 +1,41 @@
-"""File for evaluation functions to analyze the results of the snus cessation intervention simulation."""
-import random
-from config import Q_TABLE
+"""Metrics retain dropout-day observations and never impute unobserved consumption."""
+import pandas as pd
+from config import CONTEXTS
 
 
-def summarize(df, name):
-    """Summarizes the results of the snus cessation intervention simulation for a given DataFrame and condition name,
-      including average snus use, reduction percentage, dropout rate, money saved, 
-      and average nudges/skips/delays/ignores per user per day."""
-    active_df = df[df["active"] == True]
-
-    avg_day_1 = active_df[active_df["day"] == 1]["snus_used"].mean()
-    avg_day_30 = active_df[active_df["day"] == 30]["snus_used"].mean()
-
-    reduction = ((avg_day_1 - avg_day_30) / avg_day_1) * 100
-    dropout_rate = 1 - (df[df["day"] == 30]["active"].mean())
-
-    total_money_saved = active_df["money_saved"].sum()
-    avg_money_saved = active_df.groupby("user_id")["money_saved"].sum().mean()
-
-    print(f"\n{name}")
-    print("-" * 50)
-    print(f"Average snus use day 1:       {avg_day_1:.2f}")
-    print(f"Average snus use day 30:      {avg_day_30:.2f}")
-    print(f"Reduction:                    {reduction:.1f}%")
-    print(f"Dropout rate:                 {dropout_rate:.1%}")
-    print(f"Total estimated money saved:  €{total_money_saved:.2f}")
-    print(f"Avg money saved per user:     €{avg_money_saved:.2f}")
-    print(f"Average nudges per user/day:  {active_df['nudges_sent'].mean():.2f}")
-    print(f"Average skips per user/day:   {active_df['skips'].mean():.2f}")
-    print(f"Average delays per user/day:  {active_df['delays'].mean():.2f}")
-    print(f"Average ignores per user/day: {active_df['ignores'].mean():.2f}")
-    print(f"Average fatigue day 30:       {active_df[active_df['day'] == 30]['fatigue'].mean():.2f}")
-    print(f"Average self-efficacy day 30: {active_df[active_df['day'] == 30]['self_efficacy'].mean():.2f}")
+def summarize(df, name=None):
+    observed = df[df["observed_today"]]
+    first, last = df["day"].min(), df["day"].max()
+    start = observed.loc[observed.day == first, "snus_used"].mean()
+    end = observed.loc[observed.day == last, "snus_used"].mean()
+    final = df[df.day == last]
+    result = dict(first_day=int(first), final_day=int(last), first_day_use=start, final_day_use=end,
+        reduction_percent=100 * (start - end) / start if start > 0 else float("nan"),
+        dropout_rate=1 - final.active.mean(), observed_user_days=len(observed),
+        mean_daily_use=observed.snus_used.mean(), mean_daily_nudges=observed.nudges_sent.mean(),
+        total_observed_money_saved=observed.money_saved.sum(),
+        mean_observed_money_saved_per_enrolled_user=observed.money_saved.sum() / df.user_id.nunique(),
+        relapse_events=int(df.relapsed.sum()),
+        final_sustained_abstinence_fraction=(final.abstinence_streak.fillna(0) >= 14).mean())
+    if name:
+        print(name)
+        print(pd.Series(result).to_string())
+    return result
 
 
-def print_random_q_values(n=5):
-    print("\nRandom learned Q-values:\n")
-
-    trained_states = [
-        state for state, actions in Q_TABLE.items()
-        if any(value != 0 for value in actions.values())
-    ]
-
-    if not trained_states:
-        print("No trained Q-values found.")
-        return
-
-    random_states = random.sample(trained_states, min(n, len(trained_states)))
-
-    for state in random_states:
-        actions = Q_TABLE[state]
-        best_action = max(actions, key=actions.get)
-
-        print("STATE:")
-        print(f"""
-        User type:        {state[0]}
-        Inferred trigger: {state[1]}
-        Risk level:       {state[2]}
-        Fatigue level:    {state[3]}
-        Strategy:         {state[4]}
-        """)
-
-        print("\nQ-values:")
-        for action, value in actions.items():
-            print(f"  {action}: {value:.2f}")
-
-        print(f"\nBest learned action: {best_action}")
-        print("\n" + "-" * 60 + "\n")
+def trigger_accuracy(events):
+    return float((events.signal_trigger == events.inferred_trigger).mean()) if len(events) else float("nan")
 
 
-def trigger_accuracy(adaptive_events):
-    accuracy = (
-        adaptive_events["actual_primary_trigger"] ==
-        adaptive_events["inferred_trigger"]
-    ).mean()
+def trigger_confusion(events):
+    if events.empty:
+        return pd.DataFrame(0.0, index=CONTEXTS, columns=CONTEXTS)
+    return pd.crosstab(events.signal_trigger, events.inferred_trigger, normalize="index").reindex(
+        index=CONTEXTS, columns=CONTEXTS, fill_value=0)
 
-    print(f"Event-level trigger inference accuracy: {accuracy:.1%}")
-    return accuracy
+
+def aggregate_runs(metrics):
+    """Mean and run-to-run SD; independent replicate is the uncertainty unit."""
+    frame = pd.DataFrame(metrics)
+    values = [c for c in frame.select_dtypes("number") if c != "seed"]
+    return frame.groupby("condition")[values].agg(["mean", "std", "count"])

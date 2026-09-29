@@ -17,12 +17,15 @@ REWARD = {
 COST_PER_PORTION = 0.23 # Average cost of a snus portion in euros
 
 ALPHA = 0.1 # Learning rate for Q-learning updates
-GAMMA = 0.9 # Discount factor for future rewards in Q-learning updates
+GAMMA = 0.9 # Discount factor per craving event or abstinent waiting day
+
+# Explicit long-term reward assumptions; vary these in sensitivity analyses.
+ABSTINENCE_DAY_REWARD = 1.0
+DROPOUT_PENALTY = -3.0
 
 EPSILON_START = 0.60
 EPSILON_END = 0.05
 
-Q_TABLE = {}
 
 
 # -----------------------------

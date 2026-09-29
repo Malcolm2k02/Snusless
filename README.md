@@ -1,317 +1,107 @@
 # Psychology-Informed Reinforcement Learning for Adaptive Behavior Change
 
-A reinforcement learning framework that investigates how personalized digital interventions can support snus reduction under uncertainty.
+An exploratory simulation of personalized snus-reduction interventions using tabular Q-learning, noisy context signals, and a behavioral user model. Parameters are hand-designed assumptions, not clinically estimated effects. Results describe this simulator, not treatment effectiveness.
 
-The project combines **reinforcement learning**, **behavioral psychology**, and **hidden-state inference** to simulate adaptive behavior change in users with different addiction profiles. Rather than assuming full knowledge of the user's internal state, the recommender must infer hidden craving triggers from noisy contextual observations before selecting personalized interventions.
+## Install and run
 
----
+Python 3.11 or later is recommended. From the project directory on Windows:
 
-## Project Highlights
-
-- Reinforcement Learning (Tabular Q-learning)
-- Partially Observable Decision Making
-- Hidden Trigger Inference
-- Psychology-Based User Simulation
-- Personalized Intervention Policies
-- Human-Centered AI
-- Behavioral Evaluation Framework
-
----
-
-## Motivation
-
-Digital behavior change applications face two difficult problems:
-
-- **When** should an intervention be delivered?
-- **Which** intervention should be delivered?
-
-Most existing systems rely on static rules or predefined schedules. In reality, however, people differ in addiction severity, motivation, stress levels, daily routines, and responsiveness to interventions. Furthermore, the true reason behind a craving is rarely directly observable.
-
-This project explores whether a reinforcement learning agent can learn adaptive intervention policies under these uncertainties while balancing intervention effectiveness against notification fatigue, disengagement, relapse, and long-term abstinence.
-
----
-
-## System Overview
-
-The recommender interacts with a simulated population of users.
-
-```text
-Hidden Trigger
-        │
-        ▼
-Observed Context Signals
-        │
-        ▼
-Belief State Update
-        │
-        ▼
-Estimated Risk
-        │
-        ▼
-RL Policy
-        │
-        ▼
-Selected Intervention
-        │
-        ▼
-User Response
-        │
-        ▼
-Reward + Psychological Update
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe main.py --train-users 3000 --users 1000 --days 30 --seeds 123 124 125 --plots
 ```
 
-The system never observes the user's true craving trigger directly. Instead, it must infer likely triggers from noisy contextual signals before selecting an intervention.
+On macOS/Linux, use `.venv/bin/python` in place of `.\.venv\Scripts\python.exe`.
 
----
+A quick smoke run:
 
-# Features
-
-## Psychology-Based User Model
-
-Each simulated user maintains a dynamic psychological profile consisting of
-
-- Addiction severity
-- Motivation
-- Self-efficacy
-- Stress
-- Craving
-- Social pressure
-- Intervention fatigue
-- Abstinence state
-- Relapse risk
-
-These variables evolve continuously throughout the simulation.
-
----
-
-## Hidden Trigger Model
-
-Cravings originate from latent contextual triggers such as
-
-- After meals
-- Studying
-- Alcohol-related situations
-- Morning cravings
-- Commuting
-- Social gatherings
-- Breaks between tasks
-
-The recommender never observes these directly.
-
-Instead it receives noisy contextual information and estimates the most likely trigger using a probabilistic belief state.
-
----
-
-## Reinforcement Learning
-
-The adaptive recommender uses **tabular Q-learning**.
-
-### State
-
-The state consists of
-
-- User type
-- Estimated trigger
-- Estimated risk level
-- Fatigue level
-- Quitting strategy
-
-### Actions
-
-- No intervention
-- Economic reminder
-- Consumption feedback
-- Small reduction goal
-
-### Reward
-
-Rewards encourage
-
-- Skipping snus
-- Delaying consumption
-- Long-term self-regulation
-
-while discouraging
-
-- Excessive nudging
-- Ignored interventions
-- Continued consumption
-
----
-
-## Baseline Comparison
-
-The adaptive recommender is evaluated against a tracking-only baseline that contains
-
-- No adaptive intervention policy
-- No reinforcement learning
-- Identical simulated users
-- Identical craving dynamics
-
-This enables direct comparison between adaptive and non-adaptive intervention strategies.
-
----
-
-# Evaluation Metrics
-
-The framework evaluates multiple dimensions of intervention quality.
-
-Behavioral outcomes
-
-- Daily snus consumption
-- Abstinence
-- Relapse
-- Delay frequency
-
-User engagement
-
-- Intervention fatigue
-- User retention
-- Dropout rate
-
-Algorithm performance
-
-- Trigger inference accuracy
-- Learned Q-values
-- Average interventions per day
-
-Economic outcomes
-
-- Estimated money saved
-
----
-
-# Example Visualizations
-
-The framework generates figures including
-
-- Daily consumption curves
-- Baseline vs adaptive comparison
-- User retention
-- Fatigue over time
-- Trigger inference confusion matrix
-- Money saved
-- Sustained abstinence
-
-
----
-
-# Project Structure
-
-```
-project/
-
-├── config.py
-├── user.py
-├── simulation.py
-├── evaluation.py
-├── plots.py
-├── utils.py
-├── main.py
-└── README.md
-```
----
-
-# Methodology
-
-The simulation proceeds as follows
-
-1. Initialize simulated users
-2. Assign psychological profiles
-3. Generate hidden craving triggers
-4. Observe noisy contextual signals
-5. Estimate hidden trigger probabilities
-6. Estimate current risk
-7. Select intervention
-8. Simulate user response
-9. Update psychological state
-10. Update Q-table (training only)
-11. Evaluate outcomes
-
-A detailed flowchart is available below.
-
-```mermaid
-flowchart TD
-
-A[Create Users]
--->B[Hidden Trigger]
-
-B-->C[Observe Context]
-
-C-->D[Belief Update]
-
-D-->E[Estimate Risk]
-
-E-->F[RL Policy]
-
-F-->G[Choose Intervention]
-
-G-->H[User Response]
-
-H-->I[Reward]
-
-I-->J[Psychological Update]
-
-J-->K[Q-learning Update]
-
-K-->L[Next Event]
+```powershell
+.\.venv\Scripts\python.exe main.py --train-users 30 --users 20 --days 16 --seeds 123 124 --plots
 ```
 
----
+Options include `--strategy mixed|gradual_reduction|cold_turkey`, `--output results`, and `--plots` to save PNGs. Mixed assignment samples the two strategies with equal probability. Training starts at epsilon 0.60 and decreases to 0.05; evaluation uses zero exploration. Importing `main` does not run an experiment.
 
-# Technical Stack
+Run regression tests:
 
-- Python
-- NumPy
-- Pandas
-- Matplotlib
-- Reinforcement Learning
-- Behavioral Simulation
-- Hidden-State Modeling
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
 
----
+## Experiment design
 
-# Future Work
+Each seed trains a fresh policy on a separate population (training seed = evaluation seed + 1,000,000). Every evaluation condition starts with identical user profiles for that seed:
 
-Potential extensions include
+- Tracking-only: always requests no intervention.
+- Adaptive: frozen learned Q-values.
+- Random: uniformly selects an action, including no intervention.
+- Three fixed-action policies: one for each intervention.
 
-- Deep Q-Networks
-- Contextual Bandits
-- Thompson Sampling
-- Bayesian Reinforcement Learning
-- Real smartphone sensor data
-- Clinical validation
-- Mobile application deployment
+All conditions share behavioral responses, psychological feedback, abstinence, relapse, and dropout rules. A common burden gate may replace an intervention with no intervention as the daily nudge count grows; fixed-action policies therefore mean fixed *requested* action, subject to that gate. Its minimum probability is 0.2, not a hard daily cap.
 
----
+Population, context, signals, behavior, and policy use explicit random streams. Event streams are keyed by seed, user, day and event, so extra policy draws do not shift another user's environment. Trajectories can still diverge because actions change future behavior, event counts and retention. Reproducibility assumes the same Python/dependency versions and configuration.
 
-# Limitations
+`metadata.json` records run arguments, configuration, Python and dependency versions. `metrics.csv` contains one row per condition and seed. `summary.csv` reports the mean, sample standard deviation and valid count across independent runs. Standard deviation is run-to-run variability, not a confidence interval. A single seed cannot estimate variability. Daily and event CSVs, and optional plots, describe the **first evaluation seed only**; filenames identify this. No generated results are tracked in Git.
 
-This project is intended as an exploratory simulation rather than a predictive clinical model.
+## Components
 
-Current limitations include
+| File | Responsibility |
+| --- | --- |
+| `config.py` | Actions, rewards, signal distributions and user profiles |
+| `user.py` | Behavioral state, responses, feedback, abstinence and dropout |
+| `inference.py` | Event posterior and separately learned trigger prior |
+| `policy.py` | Fixed, random and Q-learning policies |
+| `simulation.py` | Shared environment, random streams, transitions and records |
+| `evaluation.py` | Structured metrics and replicated summaries |
+| `plots.py` | Figure-returning plotting functions |
+| `main.py` | Command-line experiment orchestration and exports |
+| `utils.py` | Sampling and discretization |
+| `tests/` | Experimental-design and learning regression tests |
+| `prior_adaptations/` | Historical, standalone prototypes |
 
-- Simulated behavioral data
-- Simplified psychological dynamics
-- Tabular reinforcement learning
-- Manually designed reward function
-- No real-world mobile sensing
-- Parameters chosen for plausibility rather than clinical estimation
+## Observation and learning sequence
 
----
+1. Sample one or two hidden triggers from the user's fixed trigger profile.
+2. Choose one of those triggers to generate noisy context signals; record its identity for evaluation only.
+3. Infer the current trigger from the current signals and a learned prior.
+4. Estimate risk and construct the decision state.
+5. Complete the previous learning transition using this actual next decision state.
+6. Select and deliver an action, then simulate response and update psychological state and fatigue.
+7. At day end, update abstinence, observed zero-use streak and dropout.
+8. Close pending transitions at dropout or the simulation horizon, without bootstrapping terminal value.
 
-# Citation
+The estimator keeps positive pseudo-counts over signal-generating triggers. Each event has a fresh posterior; a zero likelihood on one event cannot permanently erase a context. Posterior probabilities are added to the prior counts as an approximate online profile estimator. Responses do not heuristically reinforce whichever trigger was guessed. This is not a full POMDP solver or an exact Bayesian mixture-model posterior.
 
-If you use this project, please cite
+The policy state contains user type, most likely current trigger, discretized estimated risk and fatigue, quitting strategy, daily nudge count capped at five, and an early/late phase flag. Q-values belong to a policy instance. Evaluation does not create or update table entries, and ties are broken randomly using the explicit policy stream.
 
-Malcolm Söyring Helasterä
+Pending transitions span abstinent days until the next decision or termination. Discount time advances once per craving event and once per abstinent day without a decision. This mixed time scale is an approximation. Reward includes response rewards, the existing no-intervention adjustment and ignore/fatigue penalty, plus explicit zero-use abstinent-day reward (+1) and dropout penalty (-3). These long-term weights live in `config.py` and require sensitivity analysis.
 
-KTH Royal Institute of Technology
+## Outcomes and missing data
 
-2026
+`observed_today` means behavior was observed that day; `active` means the user remained engaged at day end. A dropout-day observation is retained. Later consumption, fatigue and other psychological outcomes are missing rather than frozen or treated as zero.
 
----
+- Consumption and fatigue averages use observed user-days, including dropout days. Changing survivor composition can affect these averages; they are not full-cohort causal effects.
+- Retention uses every enrolled user and end-of-day activity.
+- Savings are signed differences from each user's initial daily consumption, not estimated causal savings versus the tracking-only arm. Increased consumption can produce negative savings. Aggregate totals cover observed days only. The cumulative savings plot divides accumulated observed savings by the fixed enrolled population; it does not estimate post-dropout savings.
+- Abstinence status is a simulated latent state. An observed zero-use streak is recorded separately; entering that state at day end does not erase consumption earlier that day.
+- Sustained abstinence requires 14 consecutive observed zero-use days. Its denominator is all enrolled users; unobserved days are counted as unsuccessful, an explicit conservative missing-data convention.
+- Relapse records a transition out of the simulated abstinent state, not necessarily observed consumption at that moment.
+- Trigger accuracy compares the current prediction with the trigger that generated the current signals. The confusion matrix always includes all configured classes; absent rows are zero.
 
-# License
+Plots use raw daily aggregates without smoothing or carried-forward imputation. Functions return figures; the CLI saves and closes them. Summaries use the actual final simulation day and return missing values for undefined reductions or unobserved final-day consumption.
 
-MIT License
+## Modeling limitations
+
+Motivation, self-efficacy, craving and fatigue evolve. Addiction, stress, adherence, social pressure and the true trigger profile currently remain fixed. Risk estimation assumes the psychological variables are observable; only triggers are hidden. Estimated trigger risk describes one signal-generating trigger, while actual risk may sum two triggers. The no-intervention response retains its original consumption formula, which does not directly use contextual risk.
+
+Delays count as one consumed portion and receive a distinct reward and feedback effect; there is no clock-time delay model. Action quality and response rewards are assumptions shared across users, not empirical estimates. State discretization loses information and the state is not fully Markov. The model can favor an intervention because of its reward design, so compare behavioral outcomes as well as rewards. Larger training runs and sensitivity analyses are needed before drawing conclusions from a smoke run.
+
+## Historical material
+
+`README_old.md` and `prior_adaptations/` document earlier designs. Their parameters, results and standalone scripts do not define the current implementation. See the current README and configuration for supported behavior.
+
+## Citation and license
+
+Malcolm SÃ¶yring HelasterÃ¤, KTH Royal Institute of Technology, 2026.
+
+MIT License; see [LICENSE](LICENSE).

@@ -22,3 +22,5 @@ dist/
 # OS-generated files
 .DS_Store
 Thumbs.db
+# Generated experiment outputs
+results/

@@ -1,3 +1,5 @@
+> Historical documentation: this describes earlier prototypes and contains outdated settings. See [README.md](README.md) for the current implementation.
+
 # Designing-Human-Centered-AI
 Algorithmic Support
 

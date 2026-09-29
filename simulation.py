@@ -1,222 +1,135 @@
-from config import Q_TABLE, NUDGES, USER_TYPES, EPSILON_START, EPSILON_END, COST_PER_PORTION
-from user import User
+"""Shared environment for every policy, with explicit observation and episode boundaries."""
 import random
-import numpy as np
 import pandas as pd
-from utils import discretize, sample_true_triggers_for_user
+from config import (USER_TYPES, EPSILON_START, EPSILON_END, COST_PER_PORTION,
+                    ABSTINENCE_DAY_REWARD, DROPOUT_PENALTY)
+from user import User
+from inference import BeliefEstimator
+from policy import FixedPolicy, QLearningPolicy, reward_for
+from utils import sample_true_triggers_for_user, observe_context_signals
 
-"""File for the main simulation loop of the snus cessation intervention, including user behavior, nudge selection, and learning updates."""
-def simulate(n_users=300, days=30, algorithm=True, training_mode=True):
-    """Simulates the snus cessation intervention for a given number of users and days."""
-    users = []
+STRATEGIES = ("gradual_reduction", "cold_turkey")
+EVENT_COLUMNS = ["day", "event", "user_id", "user_type", "strategy", "actual_triggers",
+                 "signal_trigger", "inferred_trigger", "trigger_confidence", "nudge", "response",
+                 "actual_risk", "estimated_risk", "fatigue_before", "fatigue_after", "observed_signals"]
 
-    for _ in range(n_users):
-        user_type = random.choice(list(USER_TYPES.keys()))
-        users.append(User(user_type))
 
-    results = []
-    event_results = []
+class SimulationEnvironment:
+    def __init__(self, n_users, days, seed=123, strategy="mixed"):
+        if n_users < 1 or days < 1:
+            raise ValueError("n_users and days must be positive")
+        if strategy not in (*STRATEGIES, "mixed"):
+            raise ValueError("Unknown quitting strategy")
+        self.days = days
+        self.seed = seed
+        population_rng = random.Random(f"{seed}:population")
+        self.users = []
+        for i in range(n_users):
+            kind = population_rng.choice(list(USER_TYPES))
+            quitting = population_rng.choice(STRATEGIES) if strategy == "mixed" else strategy
+            user = User(kind, population_rng, quitting)
+            self.users.append(user)
+        self.beliefs = [BeliefEstimator() for _ in self.users]
 
-    for day in range(1, days + 1):
+    def run(self, policy, training=False):
+        if training and not isinstance(policy, QLearningPolicy):
+            raise ValueError("Only QLearningPolicy supports training")
+        rows, events = [], []
+        pending = [None] * len(self.users)
+        ticks = [0] * len(self.users)
 
-        if training_mode:
-            progress = (day - 1) / max(1, days - 1)
-            current_epsilon = EPSILON_START + progress * (EPSILON_END - EPSILON_START)
-        else:
-            current_epsilon = 0.0
+        def learn(uid, next_state=None, terminal=False):
+            transition = pending[uid]
+            if training and transition is not None:
+                state, action, reward, tick = transition
+                policy.update(state, action, reward, next_state, terminal,
+                              elapsed=max(1, ticks[uid] - tick))
+            pending[uid] = None
 
-        for user_id, user in enumerate(users):
-            user.current_day = day
-            if not user.active:
-                results.append({
-                    "day": day,
-                    "user_id": user_id,
-                    "user_type": user.user_type,
-                    "strategy": user.strategy,
-                    "active": False,
-                    "snus_used": np.nan,
-                    "nudges_sent": 0,
-                    "skips": 0,
-                    "delays": 0,
-                    "ignores": 0,
-                    "money_saved": np.nan,
-                    "fatigue": user.fatigue,
-                    "motivation": user.motivation,
-                    "self_efficacy": user.self_efficacy,
-                    "inferred_trigger": user.most_likely_trigger()
-                })
-                continue
-            if user.abstinent:
-                relapsed = user.check_relapse_from_abstinence()
-
-                if not relapsed:
+        for day in range(1, self.days + 1):
+            epsilon = EPSILON_START + (day - 1) / max(1, self.days - 1) * (EPSILON_END - EPSILON_START) if training else 0
+            for uid, user in enumerate(self.users):
+                belief = self.beliefs[uid]
+                user.current_day = day
+                observed = user.active
+                counts = dict(snus_used=0, nudges_sent=0, skips=0, delays=0, ignores=0)
+                relapsed = False
+                entered_abstinence = False
+                if observed:
+                    # Independently keyed streams keep policy draws out of environmental noise.
+                    user.rng = random.Random(f"{self.seed}:{uid}:{day}:relapse")
+                    relapsed = user.abstinent and user.check_relapse_from_abstinence()
+                    if not user.abstinent:
+                        cravings = max(1, min(int(user.baseline_use *
+                            (0.7 + user.stress * 0.25 + user.addiction * 0.25 + user.craving * 0.20)),
+                            int(user.baseline_use * 1.25)))
+                        for event in range(cravings):
+                            ticks[uid] += 1
+                            context_rng = random.Random(f"{self.seed}:{uid}:{day}:{event}:context")
+                            signal_rng = random.Random(f"{self.seed}:{uid}:{day}:{event}:signal")
+                            policy_rng = random.Random(f"{self.seed}:{uid}:{day}:{event}:policy")
+                            user.rng = random.Random(f"{self.seed}:{uid}:{day}:{event}:behavior")
+                            triggers = sample_true_triggers_for_user(user, context_rng)
+                            source, signals = observe_context_signals(triggers, signal_rng)
+                            belief.observe(signals)
+                            state = belief.state(user, counts["nudges_sent"])
+                            learn(uid, state)
+                            estimated_risk = belief.estimate_risk(user)
+                            actual_risk = user.predict_risk(triggers)
+                            # Same burden gate for every policy; no-intervention always remains possible.
+                            gate = max(0.2, 1 - counts["nudges_sent"] * 0.20)
+                            action = policy.choose(state, policy_rng, epsilon) if policy_rng.random() < gate else "no_intervention"
+                            fatigue_before = user.fatigue
+                            counts["nudges_sent"] += action != "no_intervention"
+                            response = user.respond_to_nudge(actual_risk, action)
+                            user.update_feedback_loops(response, action)
+                            if action != "no_intervention" and counts["nudges_sent"] > 4:
+                                user.fatigue = min(1.0, user.fatigue + 0.005)
+                            counts["snus_used"] += response != "skip"
+                            for outcome, key in [("skip", "skips"), ("delay", "delays"), ("ignore", "ignores")]:
+                                counts[key] += response == outcome
+                            pending[uid] = (state, action, reward_for(response, action, user.fatigue), ticks[uid])
+                            events.append(dict(day=day, event=event, user_id=uid, user_type=user.user_type,
+                                strategy=user.strategy, actual_triggers=tuple(triggers), signal_trigger=source,
+                                inferred_trigger=belief.most_likely(), trigger_confidence=max(belief.posterior.values()),
+                                nudge=action, response=response, actual_risk=actual_risk, estimated_risk=estimated_risk,
+                                fatigue_before=fatigue_before, fatigue_after=user.fatigue, observed_signals=signals))
+                        user.rng = random.Random(f"{self.seed}:{uid}:{day}:abstinence")
+                        user.check_abstinence(counts["snus_used"])
+                        entered_abstinence = user.abstinent
+                    else:
+                        ticks[uid] += 1  # an abstinent day without a decision is one waiting step
+                    user.abstinence_streak = user.abstinence_streak + 1 if counts["snus_used"] == 0 else 0
+                    user.rng = random.Random(f"{self.seed}:{uid}:{day}:dropout")
                     user.check_dropout()
+                    if training and pending[uid] is not None:
+                        state, action, reward, tick = pending[uid]
+                        day_reward = ABSTINENCE_DAY_REWARD if user.abstinent and counts["snus_used"] == 0 else 0
+                        if not user.active:
+                            day_reward += DROPOUT_PENALTY
+                        reward += policy.gamma ** (ticks[uid] - tick) * day_reward
+                        pending[uid] = (state, action, reward, tick)
+                if not user.active or day == self.days:
+                    learn(uid, terminal=True)
+                rows.append(dict(day=day, user_id=uid, user_type=user.user_type, strategy=user.strategy,
+                    observed_today=observed, active=user.active, baseline_use=user.baseline_use,
+                    **{key: value if observed else float("nan") for key, value in counts.items()},
+                    money_saved=(user.baseline_use - counts["snus_used"]) * COST_PER_PORTION if observed else float("nan"),
+                    fatigue=user.fatigue if observed else float("nan"),
+                    motivation=user.motivation if observed else float("nan"),
+                    self_efficacy=user.self_efficacy if observed else float("nan"),
+                    abstinent=user.abstinent if observed else None,
+                    entered_abstinence=entered_abstinence, relapsed=bool(relapsed),
+                    abstinence_streak=user.abstinence_streak if observed else float("nan")))
+        return pd.DataFrame(rows), pd.DataFrame(events, columns=EVENT_COLUMNS)
 
-                    results.append({
-                        "day": day,
-                        "user_id": user_id,
-                        "user_type": user.user_type,
-                        "strategy": user.strategy,
-                        "active": user.active,
-                        "snus_used": 0,
-                        "nudges_sent": 0,
-                        "skips": 0,
-                        "delays": 0,
-                        "ignores": 0,
-                        "money_saved": user.baseline_use * COST_PER_PORTION,
-                        "fatigue": user.fatigue,
-                        "motivation": user.motivation,
-                        "self_efficacy": user.self_efficacy,
-                        "inferred_trigger": user.most_likely_trigger(),
-                        "secondary_trigger": user.most_likely_trigger(),
-                        "trigger_confidence": max(user.trigger_beliefs.values())
-                    })
 
-                    continue
-            daily_cravings = int(
-                user.baseline_use *
-                (0.7 + user.stress * 0.25 + user.addiction * 0.25 + user.craving * 0.20)
-            )
-
-            daily_cravings = max(
-                1,
-                min(daily_cravings, int(user.baseline_use * 1.25))
-            )
-
-            snus_used = 0
-            nudges_sent = 0
-            skips = 0
-            delays = 0
-            ignores = 0
-
-            for _ in range(daily_cravings):
-
-                true_triggers = sample_true_triggers_for_user(user)
-                observed_signals = user.observe_context_signals(true_triggers)
-
-                actual_risk = user.predict_risk(true_triggers)
-                estimated_risk = user.estimate_risk_from_beliefs()
-
-                actual_primary_trigger = true_triggers[0]
-                inferred_trigger_before = user.most_likely_trigger()
-
-                if not algorithm:
-                    use_probability = (
-                        0.35 +
-                        0.35 * user.addiction +
-                        0.20 * user.stress +
-                        0.20 * user.craving -
-                        0.20 * user.motivation -
-                        0.20 * user.self_efficacy
-                    )
-
-                    use_probability = max(0.05, min(0.95, use_probability))
-
-                    if random.random() < use_probability:
-                        snus_used += 1
-
-                    continue
-
-                state = user.get_state(estimated_risk)
-
-                if state not in Q_TABLE:
-                    Q_TABLE[state] = {nudge: 0.0 for nudge in NUDGES}
-
-                nudge_probability = max(
-                    0.2,
-                    1 - (nudges_sent * 0.20)
-                )
-
-                if random.random() < nudge_probability:
-                    nudge = user.choose_nudge(estimated_risk, current_epsilon)
-                else:
-                    nudge = "no_intervention"
-
-                if nudge != "no_intervention":
-                    nudges_sent += 1
-
-                response = user.respond_to_nudge(actual_risk, nudge)
-
-                user.update_feedback_loops(response, nudge)
-                user.update_trigger_beliefs(observed_signals, response)
-
-                event_results.append({
-                    "day": day,
-                    "user_id": user_id,
-                    "user_type": user.user_type,
-                    "strategy": user.strategy,
-                    "actual_triggers": ",".join(true_triggers),
-                    "actual_primary_trigger": actual_primary_trigger,
-                    "observed_time_of_day": observed_signals["time_of_day"],
-                    "observed_location_type": observed_signals["location_type"],
-                    "observed_time_since_meal": observed_signals["time_since_meal"],
-                    "observed_day_type": observed_signals["day_type"],
-                    "observed_movement_level": observed_signals["movement_level"],
-                    "observed_phone_activity": observed_signals["phone_activity"],
-                    "inferred_trigger": inferred_trigger_before,
-                    "nudge": nudge,
-                    "response": response,
-                    "actual_risk": actual_risk,
-                    "estimated_risk": estimated_risk,
-                    "fatigue": user.fatigue,
-                    "motivation": user.motivation,
-                    "self_efficacy": user.self_efficacy
-                })
-
-                next_estimated_risk = user.estimate_risk_from_beliefs()
-                next_state = user.get_state(next_estimated_risk)
-
-                if training_mode:
-                    user.update_learning(state, nudge, response, next_state)
-
-                if response == "skip":
-                    skips += 1
-                elif response == "delay":
-                    delays += 1
-                    snus_used += 1
-                elif response == "ignore":
-                    ignores += 1
-                    snus_used += 1
-                elif response == "use":
-                    snus_used += 1
-
-                if nudges_sent > 4:
-                    user.fatigue = min(1.0, user.fatigue + 0.005)
-            
-            user.check_abstinence(snus_used)
-            user.check_dropout()
-
-            money_saved = max(0, (user.baseline_use - snus_used) * COST_PER_PORTION)
-
-            beliefs = sorted(
-                user.trigger_beliefs.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )
-
-            results.append({
-                "day": day,
-                "user_id": user_id,
-                "user_type": user.user_type,
-                "strategy": user.strategy,
-                "active": user.active,
-                "snus_used": snus_used,
-                "nudges_sent": nudges_sent,
-                "skips": skips,
-                "delays": delays,
-                "ignores": ignores,
-                "money_saved": money_saved,
-                "fatigue": user.fatigue,
-                "motivation": user.motivation,
-                "self_efficacy": user.self_efficacy,
-
-                # Most likely inferred trigger
-                "inferred_trigger": beliefs[0][0],
-
-                # Second most likely inferred trigger
-                "secondary_trigger": beliefs[1][0],
-
-                # Probability/confidence of top trigger
-                "trigger_confidence": beliefs[0][1]
-            })
-    return pd.DataFrame(results), pd.DataFrame(event_results)
+def simulate(n_users=300, days=30, algorithm=True, training_mode=False, *, policy=None, seed=123, strategy="mixed"):
+    """Pass an explicit policy for training or evaluation; default is tracking-only."""
+    if policy is None:
+        if training_mode:
+            raise ValueError("Pass a QLearningPolicy explicitly to retain trained values")
+        policy = FixedPolicy()
+    if not algorithm:
+        policy = FixedPolicy()
+    return SimulationEnvironment(n_users, days, seed, strategy).run(policy, training_mode)
