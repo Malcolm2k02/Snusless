@@ -1,5 +1,9 @@
 # Psychology-Informed Reinforcement Learning for Adaptive Behavior Change
 
+## SnusLess website
+
+The Swedish mobile-first app is in [`web/`](web/README.md). It implements personal logging, progress, craving support, and user-controlled suggestions using persistent, account-scoped storage. See [`MVP_SPEC.md`](MVP_SPEC.md) for the product scope and [`web/README.md`](web/README.md) for setup, checks, and hosting status. The simulator below remains a separate research component.
+
 An exploratory simulation of personalized snus-reduction interventions using tabular Q-learning, noisy context signals, and a behavioral user model. Parameters are hand-designed assumptions, not clinically estimated effects. Results describe this simulator, not treatment effectiveness.
 
 ## Install and run
