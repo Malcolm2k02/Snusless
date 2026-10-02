@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./urban-theme.css";
 export const metadata: Metadata = { title: "SnusLess — På dina villkor", description: "Förstå dina snusvanor. Små steg, på dina villkor.", icons: { icon: "/favicon.svg" } };
 export default function RootLayout({ children }: Readonly<{
     children: React.ReactNode;

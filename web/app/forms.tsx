@@ -7,7 +7,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescripti
 import { toast } from 'sonner';
 import { contexts, goals, dayAt, defaults, type Journal, type Command, type Settings, type Entry, type Context } from '@/lib/journal';
 export type Save = (c: Command, done?: () => void) => void;
-export function Brand() { return <div className="brand"><span className="brand-mark">s</span>snusless<span className="beta">BETA</span></div>; }
+export function Brand() { return <div className="brand"><span className="brand-mark" aria-hidden="true">S/</span><span className="brand-name">snusless</span><span className="beta">BETA</span></div>; }
 export function Choice({ value, onChange, options, label }: {
     value: string;
     onChange: (v: string) => void;
