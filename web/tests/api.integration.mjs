@@ -4,9 +4,28 @@ import {Miniflare} from 'miniflare';
 import {readFile,readdir} from 'node:fs/promises';
 const files=(await readdir('dist/server',{recursive:true})).filter(f=>f.endsWith('.js')&&f!=='index.js');
 const accountIds=[randomUUID(),randomUUID()];
+const cloudJournals=new Map();
 const mf=new Miniflare({modules:[{type:'ESModule',path:'dist/server/index.js'},...files.map(f=>({type:'ESModule',path:'dist/server/'+f}))],compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],d1Databases:{DB:'test-db'},cf:false,
  bindings:{SUPABASE_URL:'https://auth.example.test',SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test'},
  outboundService:async request=>{
+  if (request.url.startsWith('https://auth.example.test/rest/v1/journals')) {
+    const index=['Bearer account-a','Bearer account-b'].indexOf(request.headers.get('authorization'));
+    if (index < 0) return Response.json({code:'invalid_token'},{status:401});
+    const id=accountIds[index], url=new URL(request.url);
+    assert.equal(request.headers.get('apikey'),'sb_publishable_test');
+    assert.equal(url.searchParams.get('user_id') ?? 'eq.'+id, 'eq.'+id);
+    if(request.method==='GET') return Response.json(cloudJournals.has(id)?[cloudJournals.get(id)]:[]);
+    if(request.method==='DELETE') {cloudJournals.delete(id);return Response.json([]);}
+    const body=await request.json();
+    if(request.method==='POST') {
+      assert.equal(body.user_id,id);
+      if(cloudJournals.has(id)) return Response.json({code:'23505'},{status:409});
+      cloudJournals.set(id,{data:body.data,revision:body.revision});return Response.json([cloudJournals.get(id)]);
+    }
+    const row=cloudJournals.get(id);
+    if(!row || url.searchParams.get('revision')!=='eq.'+row.revision) return Response.json([]);
+    cloudJournals.set(id,body);return Response.json([body]);
+  }
   assert.equal(request.url,'https://auth.example.test/auth/v1/user');
   assert.equal(request.headers.get('apikey'),'sb_publishable_test');
   const token=request.headers.get('authorization');

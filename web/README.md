@@ -2,54 +2,47 @@
 
 Swedish mobile-first MVP based on `../MVP_SPEC.md` and `../PRODUCT_BRIEF.md`. The Python research simulator remains separate and is not used to infer facts about app users.
 
-## Start it again on Malcolm's Windows computer
+## Run on this Windows computer
 
-The dependencies and local database are already set up on this computer. Open **PowerShell**, paste these commands, and press Enter:
+Double-click **Start SnusLess.cmd** in the repository's top-level folder. Keep its terminal window open while using the website. Open [http://127.0.0.1:5173/](http://127.0.0.1:5173/) and choose **Forts�tt utan konto**. Press **Ctrl+C** to stop the server.
+
+You can also use PowerShell:
 
 ```powershell
-cd C:\Users\Malcolm\Documents\GitHub\Snusless\web
-
-$env:PATH = "$PWD\.sites-runtime\tools;C:\Users\Malcolm\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin;$env:PATH"
-
-npm run dev
+cd C:\Users\malco\OneDrive\Dokument\GitHub\Snusless\web
+npm.cmd run dev -- --hostname 127.0.0.1
 ```
 
-Open the **Local** URL printed in the terminal, normally [http://127.0.0.1:5173/](http://127.0.0.1:5173/).
+Guest mode needs no authentication provider or database setup. Its journal is saved in this browser, separately for each hostname and port. Use the same address each time and export your data before clearing browser storage.
 
-- Keep the terminal open while using the app. To stop it, press **Ctrl+C**.
-- To run it another day or after restarting the computer, repeat the commands above. No database setup is needed again.
-- Choose **Fortsätt utan konto** to start immediately with browser-local storage. Email/password and Google options require the one-time setup in [AUTH_SETUP.md](AUTH_SETUP.md). Existing local test records remain available under **Tidigare testkonto** → **Öppna befintlig ChatGPT-logg**, labeled **Lokalt testkonto**.
-- Your local test records survive server restarts in `web/.wrangler/state`. Do not delete that folder if you want to keep them. Use the app's export button to save a readable copy of your records.
-- This address works on this computer while the server is running; it is not a published website.
+Email/password and Google sign-in require the configuration in [AUTH_SETUP.md](AUTH_SETUP.md), plus the local database migration below. Legacy ChatGPT sign-in requires a trusted Sites dispatcher and is not provided by this standalone local server.
 
-The PATH line uses the Node/npm runtimes prepared during development and only affects the current PowerShell window. If you already have Node and npm installed normally, you can omit it. These machine-specific runtime paths are not included when cloning the repository onto another computer.
+### First-time dependency setup
 
-### If it does not start
-
-- **`npm` or `node` is not recognized:** run the PATH line above in the same terminal. If those runtime folders no longer exist, install Node.js with npm (Node 22.13 or later), reopen PowerShell, and use the setup below if dependencies are missing.
-- **A server is already running:** open its existing Local URL, or stop it with Ctrl+C in its terminal before starting another.
-- **The page cannot connect:** check that the terminal is still running and use the exact Local URL it printed. The port may differ from 5173.
-- **Dependencies are missing:** run `npm ci` from the `web` folder, then `npm run dev`. Keep the existing database; do not rerun the initial migration against it.
-
-## First-time setup on a new computer
-
-Requires Node 22.13+ and npm on PATH.
+Requires Node.js with npm (Node 24 LTS recommended). The launcher installs missing dependencies automatically. To install them manually:
 
 ```powershell
 cd C:\path\to\Snusless\web
-npm ci
-npm run build
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_round_umar.sql
-npm run dev
+npm.cmd run install:ci
+npm.cmd run dev -- --hostname 127.0.0.1
 ```
 
-Replace the example folder with your actual checkout path. Apply the initial migration only once per local database; it has already been applied on Malcolm's computer. Later migrations must be applied in order. Open the exact URL printed by the development server (normally http://127.0.0.1:5173).
+### Supabase database for Google/email accounts
 
-Development sign-in is a loopback-only test account supplied by the starter. It is labeled **Lokalt testkonto** in the app and persists in local D1. It is not a real public login service. The legacy ChatGPT path uses Sites' dispatch-owned sign-in; the dispatcher, not the client, must supply the authenticated user headers. Do not expose the Worker directly to the internet behind an untrusted header-forwarding proxy.
+Run `supabase/001_journals.sql` in your Supabase project's SQL Editor before using account mode. This enables private account journals and optimistic revision checks. If `.sites-runtime/supabase-import.sql` is present, run it after the schema to import the existing local account journals without overwriting cloud data.
+
+Google/email logs are now stored in your hosted Supabase project, including during local development. Guest logs remain browser-local. Legacy trusted-dispatcher records remain in D1; preserve `.wrangler/state` if you need them.
+
+### If it does not start
+
+- If Node or npm is missing, install Node.js 24 LTS and reopen the terminal.
+- If dependencies are missing, run `npm.cmd run install:ci` in `web`.
+- If the port is occupied, use the Local URL printed by the server, or stop the previous server with Ctrl+C.
+- Keep the terminal open and use its exact Local URL. This website runs locally while the server is running.
 
 ## Account and guest access
 
-See [AUTH_SETUP.md](AUTH_SETUP.md) for Supabase email/password and Google configuration, guest-storage behavior, and verification. Guest mode is available without a provider project; account buttons remain disabled until configured. No passwords are stored in D1.
+See [AUTH_SETUP.md](AUTH_SETUP.md) for Supabase email/password and Google configuration, guest-storage behavior, and verification. Guest mode is available without a provider project; account buttons remain disabled until configured. No passwords are stored in journal tables.
 
 ## Implemented
 
@@ -64,7 +57,7 @@ See [AUTH_SETUP.md](AUTH_SETUP.md) for Supabase email/password and Google config
 
 ## Architecture
 
-`app/snus-app.tsx` owns request/retry state. `forms.tsx`, `progress-view.tsx`, and `craving-support.tsx` implement the main surfaces. `lib/journal.ts` contains validated commands, calendar calculations, immutable transitions, and suggestion rules. `app/api/state/route.ts` enforces identity and same-origin mutations. D1 stores one bounded JSON document per user with an atomic revision check; records within it have stable IDs. This favors small pilot workloads over large-scale querying. The document limit is 1.5 MB; production scaling would require normalized tables, pagination, and operation-retention policy.
+`app/snus-app.tsx` owns request/retry state. `forms.tsx`, `progress-view.tsx`, and `craving-support.tsx` implement the main surfaces. `lib/journal.ts` contains validated commands, calendar calculations, immutable transitions, and suggestion rules. `app/api/state/route.ts` enforces identity and same-origin mutations. Supabase stores one bounded JSON document per Google/email user with RLS and an atomic revision check; records within it have stable IDs. This favors small pilot workloads over large-scale querying. The document limit is 1.5 MB; production scaling would require normalized tables, pagination, and operation-retention policy.
 
 The API never accepts a user ID as an authorization source. Every query is scoped to the trusted signed-in ID. GET responses are no-store. No usage records are emitted to diagnostic logs. Exports omit internal idempotency keys but include goal/cost history, entries, sessions, preferences, completion dates and timezones (`snusless-export-v1`). Deletion removes the active SnusLess document, not the ChatGPT identity or provider backups.
 
@@ -77,7 +70,7 @@ npm run build
 npm run test:api
 ```
 
-API tests execute the built Worker in Miniflare with an isolated, disposable D1 database and synthetic trusted identity headers. They check anonymous rejection, origin checks, actual persisted reads/writes, idempotency, cross-account isolation, revision conflicts, and deletion isolation. No deployed data is used. The direct harness also avoids a local Wrangler preview-proxy restart error seen during POST testing on this Windows host.
+API tests execute the built Worker in Miniflare with an isolated, disposable D1 database and synthetic trusted identity headers. They check anonymous rejection, origin checks, actual persisted reads/writes, idempotency, cross-account isolation, revision conflicts, and deletion isolation. Supabase REST is mocked in these tests; real PostgreSQL RLS must be checked in the configured project. No deployed data is used. The direct harness also avoids a local Wrangler preview-proxy restart error seen during POST testing on this Windows host.
 
 Domain tests cover the specification's savings fixture, negative differences, missing/zero days, retries, edits across dates, cost history, pattern eligibility/dismissal/pause, timers, timezone retention, and invalid inputs.
 
