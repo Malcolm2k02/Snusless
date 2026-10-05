@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 800" fill="none">
+<defs>
+ <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#33204f"/><stop offset=".38" stop-color="#9b528c"/><stop offset=".68" stop-color="#f6a59f"/><stop offset="1" stop-color="#37294f"/></linearGradient>
+ <linearGradient id="sun" x2="0" y2="1"><stop stop-color="#ffe5bf"/><stop offset="1" stop-color="#ff91b4"/></linearGradient>
+ <linearGradient id="water" x2="0" y2="1"><stop stop-color="#856191"/><stop offset="1" stop-color="#120e24"/></linearGradient>
+ <pattern id="windows" width="20" height="24" patternUnits="userSpaceOnUse"><rect x="5" y="5" width="3" height="8" fill="#ffb0ce" opacity=".4"/></pattern>
+ <g id="palm" fill="#191329"><path d="M-9 0C-4-92 22-199 9-285L20-287C44-190 13-79 12 0Z"/><path d="M15-285C-26-340-95-334-126-287C-72-312-22-299 15-285ZM15-285C-43-296-105-263-120-222C-76-259-31-272 15-285ZM15-285C-7-252-48-212-42-161C-23-209 11-236 15-285ZM15-285C51-344 107-347 153-310C96-322 54-306 15-285ZM15-285C81-302 143-274 163-231C106-266 65-272 15-285ZM15-285C56-260 89-206 79-166C63-207 37-234 15-285ZM15-285C12-328 43-366 67-375C41-330 37-307 15-285Z"/></g>
+</defs>
+<path fill="url(#sky)" d="M0 0h1600v800H0z"/>
+<circle cx="1090" cy="325" r="141" fill="url(#sun)"/>
+<g stroke="#b96797" stroke-width="7" opacity=".5"><path d="M947 350h286M951 372h278M961 395h258M978 418h224M1005 441h170"/></g>
+<path d="M0 482C240 465 380 489 600 478S1200 460 1600 480V800H0Z" fill="url(#water)"/>
+<g fill="#352541"><path d="M160 480V361h65v119h20V310h75v170h22V384h55v96h30V331h57v149h32V277h55v-33h12v33h16v203h25V390h70v90h23V347h82v133h30V409h95v71h31V368h53v112h69V399h43v81h110V361h61v119h40V406h91v74Z"/><path d="M245 310h75v170h-75Zm271-33h83v203h-83Zm120 70h82v133h-82Zm477 14h61v119h-61Z" fill="url(#windows)"/></g>
+<g stroke="#ffb1c4" opacity=".2"><path d="M730 510h520M900 526h310M680 549h600M1000 572h160M780 600h460M600 640h710"/></g>
+<path d="M0 610C340 586 411 640 722 647S1330 586 1600 615V800H0Z" fill="#161126"/>
+<use href="#palm" transform="translate(148 693) scale(1.6) rotate(-9)"/>
+<use href="#palm" transform="translate(1447 722) scale(1.95) rotate(10)"/>
+<use href="#palm" transform="translate(1310 684) scale(.95) rotate(-6)"/>
+<use href="#palm" transform="translate(325 655) scale(.8) rotate(13)"/>
+<path d="M0 760h1600v40H0z" fill="#120e24"/>
+</svg>
